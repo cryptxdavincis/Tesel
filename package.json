@@ -1,10 +1,13 @@
 {
   "name": "Tesel",
+  "version": "1.0.0",
   "description": "tes tempek",
-  "additionalPackages": {
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
     "express": "*",
-    "body-parser": "*",
-    "fs": "*",
-    "path": "*"
+    "body-parser": "*"
   }
 }
