@@ -1,0 +1,10 @@
+{
+  "name": "Tesel",
+  "description": "tes tempek",
+  "additionalPackages": {
+    "express": "*",
+    "body-parser": "*",
+    "fs": "*",
+    "path": "*"
+  }
+}
